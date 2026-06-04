@@ -1,0 +1,6 @@
+{
+  "name": "Prescripta",
+  "description": "Prescripta is an ePrescription & Clinic Workflow Management System designed with a high-density clinical dashboard for appointment scheduling, queue progression, patient vitals tracking, and rapid digital prescription drafting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

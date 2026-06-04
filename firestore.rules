@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE SECURITY PRIMITIVES ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // --- ENTITY MATCH RULES & VALIDATION ---
+
+    // 1. Doctors Profiles Collection
+    match /doctors/{doctorId} {
+      allow get: if isSignedIn();
+      allow create: if isVerified() && doctorId == request.auth.uid && isValidDoctor(incoming());
+      allow update: if isVerified() && doctorId == request.auth.uid && isValidDoctor(incoming()) 
+                     && incoming().email == request.auth.token.email; // Prevent spoofing email edit
+      allow delete: if false; // Profiles are permanent
+
+      function isValidDoctor(data) {
+        return data.keys().hasAll(['name', 'specialty', 'degree', 'regNo', 'clinicName', 'address', 'phone', 'email'])
+          && data.keys().size() <= 10
+          && data.name is string && data.name.size() <= 128
+          && data.specialty is string && data.specialty.size() <= 128
+          && data.degree is string && data.degree.size() <= 128
+          && data.regNo is string && data.regNo.size() <= 128
+          && data.clinicName is string && data.clinicName.size() <= 128
+          && data.address is string && data.address.size() <= 256
+          && data.phone is string && data.phone.size() <= 32
+          && data.email is string && data.email.size() <= 128
+          && data.email == request.auth.token.email; // Strict identity binding
+      }
+    }
+
+    // 2. Patient Directory
+    match /patients/{patientId} {
+      // Direct get and lists restricted to owning doctor id
+      allow get: if isVerified() && resource.data.doctorId == request.auth.uid;
+      allow list: if isVerified() && resource.data.doctorId == request.auth.uid;
+      
+      allow create: if isVerified() && isValidId(patientId) && incoming().doctorId == request.auth.uid && isValidPatient(incoming());
+      allow update: if isVerified() && isValidId(patientId) && resource.data.doctorId == request.auth.uid 
+                     && incoming().doctorId == request.auth.uid && isValidPatient(incoming())
+                     && incoming().createdAt == resource.data.createdAt; // Immortal field
+                     
+      allow delete: if isVerified() && resource.data.doctorId == request.auth.uid;
+
+      function isValidPatient(data) {
+        return data.keys().hasAll(['id', 'name', 'age', 'gender', 'mobile', 'createdAt', 'doctorId'])
+          && data.keys().size() <= 9
+          && data.id is string && data.id.size() <= 128
+          && data.name is string && data.name.size() <= 128
+          && data.age is int && data.age >= 0 && data.age <= 150
+          && (data.gender == 'Male' || data.gender == 'Female' || data.gender == 'Other')
+          && data.mobile is string && data.mobile.size() <= 32
+          && data.createdAt is string
+          && data.doctorId == request.auth.uid;
+      }
+    }
+
+    // 3. Appointment Queues
+    match /appointments/{appointmentId} {
+      allow get: if isVerified() && resource.data.doctorId == request.auth.uid;
+      allow list: if isVerified() && resource.data.doctorId == request.auth.uid;
+
+      allow create: if isVerified() && isValidId(appointmentId) && incoming().doctorId == request.auth.uid && isValidAppointment(incoming());
+      allow update: if isVerified() && isValidId(appointmentId) && resource.data.doctorId == request.auth.uid 
+                     && incoming().doctorId == request.auth.uid && isValidAppointment(incoming())
+                     && incoming().patientId == resource.data.patientId; // Immortal linkage
+
+      allow delete: if isVerified() && resource.data.doctorId == request.auth.uid;
+
+      function isValidAppointment(data) {
+        return data.keys().hasAll(['id', 'patientId', 'patientName', 'patientAge', 'patientGender', 'patientMobile', 'timeSlot', 'date', 'status', 'tokenNumber', 'doctorId'])
+          && data.keys().size() <= 11
+          && data.id is string && data.id.size() <= 128
+          && data.patientId is string && data.patientId.size() <= 128
+          && data.patientName is string && data.patientName.size() <= 128
+          && data.patientAge is int
+          && (data.patientGender == 'Male' || data.patientGender == 'Female' || data.patientGender == 'Other')
+          && data.patientMobile is string
+          && data.timeSlot is string
+          && data.date is string
+          && (data.status == 'Scheduled' || data.status == 'Checked-In' || data.status == 'Engaging' || data.status == 'Billing' || data.status == 'Completed' || data.status == 'Cancelled')
+          && data.tokenNumber is int
+          && data.doctorId == request.auth.uid;
+      }
+    }
+
+    // 4. Clinical Prescriptions
+    match /prescriptions/{prescriptionId} {
+      allow get: if isVerified() && resource.data.doctorId == request.auth.uid;
+      allow list: if isVerified() && resource.data.doctorId == request.auth.uid;
+
+      allow create: if isVerified() && isValidId(prescriptionId) && incoming().doctorId == request.auth.uid && isValidPrescription(incoming());
+      allow update: if isVerified() && isValidId(prescriptionId) && resource.data.doctorId == request.auth.uid 
+                     && incoming().doctorId == request.auth.uid && isValidPrescription(incoming())
+                     && incoming().patientId == resource.data.patientId; // Immutable link to patient
+
+      allow delete: if isVerified() && resource.data.doctorId == request.auth.uid;
+
+      function isValidPrescription(data) {
+        return data.keys().hasAll(['id', 'patientId', 'patientName', 'patientAge', 'patientGender', 'date', 'complaints', 'vitals', 'diagnosis', 'medications', 'labTests', 'advice', 'billAmount', 'isPaid', 'doctorId'])
+          && data.keys().size() <= 18 // Include opt followUpDate & internalNotes
+          && data.id is string && data.id.size() <= 128
+          && data.patientId is string && data.patientId.size() <= 128
+          && data.patientName is string && data.patientName.size() <= 128
+          && data.patientAge is int
+          && (data.patientGender == 'Male' || data.patientGender == 'Female' || data.patientGender == 'Other')
+          && data.date is string
+          && data.complaints is list
+          && data.vitals is map
+          && data.diagnosis is list
+          && data.medications is list
+          && data.labTests is list
+          && data.advice is string
+          && data.billAmount is int && data.billAmount >= 0
+          && data.isPaid is bool
+          && data.doctorId == request.auth.uid
+          && (!data.keys().contains('internalNotes') || data.internalNotes is string);
+      }
+    }
+  }
+}

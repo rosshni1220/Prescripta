@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "DoctorProfile": {
+      "title": "DoctorProfile",
+      "description": "Details of the authorized doctor running the clinic dashboard",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "specialty": { "type": "string" },
+        "degree": { "type": "string" },
+        "regNo": { "type": "string" },
+        "clinicName": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "consultationFee": { "type": "number" }
+      },
+      "required": ["name", "specialty", "regNo", "clinicName", "phone", "email"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "Information card of a registered patient",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "age": { "type": "number" },
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "mobile": { "type": "string" },
+        "email": { "type": "string" },
+        "bloodGroup": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "doctorId": { "type": "string" }
+      },
+      "required": ["id", "name", "age", "gender", "mobile", "createdAt", "doctorId"]
+    },
+    "Vitals": {
+      "title": "Vitals",
+      "type": "object",
+      "properties": {
+        "bp": { "type": "string" },
+        "pulse": { "type": "number" },
+        "temp": { "type": "number" },
+        "weight": { "type": "number" },
+        "height": { "type": "number" },
+        "bmi": { "type": "number" },
+        "spo2": { "type": "number" }
+      }
+    },
+    "Medication": {
+      "title": "Medication",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "dosage": { "type": "string" },
+        "frequency": { "type": "string", "enum": ["Daily", "Twice daily", "Thrice daily", "Four times a day", "Once weekly", "As needed (PRN)"] },
+        "duration": { "type": "number" },
+        "durationUnit": { "type": "string", "enum": ["Days", "Weeks", "Months", "Single Dose"] },
+        "timing": { "type": "string", "enum": ["Before Food", "After Food", "With Food", "Empty Stomach", "At Bedtime"] },
+        "instruction": { "type": "string" }
+      },
+      "required": ["name", "dosage", "frequency", "duration", "durationUnit", "timing"]
+    },
+    "Prescription": {
+      "title": "Prescription",
+      "description": "An electronic medical prescription issued to a patient",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "patientAge": { "type": "number" },
+        "patientGender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "date": { "type": "string" },
+        "complaints": { "type": "array" },
+        "vitals": { "$ref": "#/entities/Vitals" },
+        "diagnosis": { "type": "array" },
+        "medications": { "type": "array" },
+        "labTests": { "type": "array" },
+        "advice": { "type": "string" },
+        "followUpDate": { "type": "string" },
+        "billAmount": { "type": "number" },
+        "isPaid": { "type": "boolean" },
+        "doctorId": { "type": "string" }
+      },
+      "required": ["id", "patientId", "patientName", "patientAge", "patientGender", "date", "medications", "billAmount", "isPaid", "doctorId"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Details of scheduled clinical consultations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "patientAge": { "type": "number" },
+        "patientGender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "patientMobile": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["Scheduled", "Checked-In", "Engaging", "Billing", "Completed", "Cancelled"] },
+        "tokenNumber": { "type": "number" },
+        "doctorId": { "type": "string" }
+      },
+      "required": ["id", "patientId", "patientName", "patientAge", "patientGender", "patientMobile", "timeSlot", "date", "status", "tokenNumber", "doctorId"]
+    }
+  },
+  "firestore": {
+    "doctors/{doctorId}": {
+      "schema": "DoctorProfile",
+      "description": "Doctor profile registration details keyed by authorization UID"
+    },
+    "patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Global patient directory schema, restricted per doctor assignment field"
+    },
+    "appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Schedule queues assigned per doctor ID mapping"
+    },
+    "prescriptions/{prescriptionId}": {
+      "schema": "Prescription",
+      "description": "E-prescription history ledger logged per doctor ID mapping"
+    }
+  }
+}
